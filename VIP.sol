@@ -11,6 +11,7 @@ contract VipOptions is Ownable {
         uint256 bonusVip;
         uint256 startTime;
         uint256 endTime;
+        uint256 countedAmount
     }
 
     uint256 private countIdVips = 4;
@@ -18,9 +19,9 @@ contract VipOptions is Ownable {
     mapping(uint256 => vipInfo) public infoVipList;
 
     constructor() {
-        infoVipList[1] = vipInfo(uint256(10000000000000000000000),uint256(20),uint256(1649934077),uint256(1682843442));
-        infoVipList[2] = vipInfo(uint256(20000000000000000000000),uint256(50),uint256(1649934077),uint256(1682843442));
-        infoVipList[3] = vipInfo(uint256(50000000000000000000000),uint256(80),uint256(1649934077),uint256(1682843442));
+        infoVipList[1] = vipInfo(uint256(10000000000000000000000),uint256(20),uint256(1649934077),uint256(1682843442),0);
+        infoVipList[2] = vipInfo(uint256(20000000000000000000000),uint256(50),uint256(1649934077),uint256(1682843442),0);
+        infoVipList[3] = vipInfo(uint256(50000000000000000000000),uint256(80),uint256(1649934077),uint256(1682843442),0);
     }
 
     function setVips(
@@ -37,7 +38,8 @@ contract VipOptions is Ownable {
                 _optionInfoPrice[i], 
                 _optionInfoBonusVip[i], 
                 _optionInfoStartTime[i],
-                _optionInfoEndTime[i]
+                _optionInfoEndTime[i],
+                0
             );
             infoVipList[countIdVips] = info;
             countIdVips+=1;

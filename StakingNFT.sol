@@ -6,11 +6,11 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Snapshot.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./lib/OptionNFT.sol";
 import "./lib/VIP.sol";
 
-contract StakingDFH is Pausable, Ownable, StakingOptionsNFT, VipOptions {
+contract StakingNFT is Pausable, Ownable, StakingOptionsNFT, VipOptions,ReentrancyGuard {
 
     struct userInfoStaking {
         bool isActive;
@@ -40,8 +40,9 @@ contract StakingDFH is Pausable, Ownable, StakingOptionsNFT, VipOptions {
     mapping(address => userInfoTotal) private infoTotal;
     mapping(address => userInfoVip) public infoVipUser;
     mapping(address => bool) public erc721Whitelist;
+    mapping(address => uint256) public countStakeNFT;
     
-    event Erc721WhitelistUpdated(address[] erc721s);
+    event Erc721WhitelistUpdated(address[] erc721s, bool status);
     event UserBuyVip(address indexed user,uint256 indexed vip);
     event UsersStaking(address indexed user, uint256 amountStake, uint256 indexed option, uint256 id, address erc721);
     event UserUnstaking(address indexed user, uint256 claimableAmountStake, uint256 indexed option, uint256 indexed id,address erc721);
@@ -57,7 +58,7 @@ contract StakingDFH is Pausable, Ownable, StakingOptionsNFT, VipOptions {
         tokenRR = _tokenRR;
     }
 
-    function updateErc721Whitelist(address[] memory erc721s)
+    function updateErc721Whitelist(address[] memory erc721s, bool status)
         public
         onlyOwner
     {
@@ -66,10 +67,10 @@ contract StakingDFH is Pausable, Ownable, StakingOptionsNFT, VipOptions {
         require(length > 0, "NftMarket: erc721 list is required");
 
         for (uint256 i = 0; i < length; i++) {
-            erc721Whitelist[erc721s[i]] = true;
+            erc721Whitelist[erc721s[i]] = status;
         }
 
-        emit Erc721WhitelistUpdated(erc721s);
+        emit Erc721WhitelistUpdated(erc721s, status);
     }
 
     function pause() public onlyOwner {
@@ -80,25 +81,29 @@ contract StakingDFH is Pausable, Ownable, StakingOptionsNFT, VipOptions {
         _unpause();
     }
 
-    function buyVip(uint256 _vip) public {
-        require(infoVipList[_vip].endTime <= block.timestamp, "Vip is not available");
+    function buyVip(uint256 _vip) public whenNotPaused nonReentrant {
+        require(infoVipList[_vip].endTime >= block.timestamp, "Vip is not available");
+        require(infoVipUser[msg.sender].vipMember != _vip, "Vip: You are at this vip");
+        require(infoVipUser[msg.sender].vipMember < _vip, "Vip: You are on a higher level than this level");
         uint256 _amount = infoVipList[_vip].price;
 
         token.transferFrom(msg.sender, address(this), _amount);
 
-        if (infoVipUser[_msgSender()].isVip == false) {
-            infoVipUser[_msgSender()].isVip = true;
-            infoVipUser[_msgSender()].vipMember = _vip;
+        if (infoVipUser[msg.sender].isVip == false) {
+            infoVipUser[msg.sender].isVip = true;
+            infoVipUser[msg.sender].vipMember = _vip;
         }
         else {
-            infoVipUser[_msgSender()].vipMember = _vip;
+            infoVipUser[msg.sender].vipMember = _vip;
         }
         emit UserBuyVip(msg.sender, _vip);
+        vipInfo storage info = infoVipList[_vip];
+        info.countedAmount+=1;
     }
 
-    function userStake(uint256 _tokenId, uint256 _ops, uint256 _id, address _erc721) public whenNotPaused {
-        require(erc721Whitelist[_erc721] == true,"Contract is not in whitelist");
-        bytes32 _value = keccak256(abi.encodePacked(_msgSender(), _ops, _id));
+    function userStake(uint256 _tokenId, uint256 _ops, uint256 _id, address _erc721) public whenNotPaused nonReentrant {
+        require(erc721Whitelist[_erc721] == true,"ContractNFT is not in whitelist");
+        bytes32 _value = keccak256(abi.encodePacked(msg.sender, _ops, _id));
         require(infoStaking[_value].isActive == false, "UserStake: Duplicate id");
         OptionsStaking memory options = infoOptions[_ops];
         uint256 _curPool = options.curPool + 1;
@@ -108,18 +113,19 @@ contract StakingDFH is Pausable, Ownable, StakingOptionsNFT, VipOptions {
         require(block.timestamp <= options.endTime, "UserStake: This Event Over Time");
 
         ERC721(_erc721).transferFrom(msg.sender, address(this), _tokenId);
+        countStakeNFT[_erc721]+=1;
 
         uint256 _lockDay =  options.lockDays;
         uint256 _endTime = block.timestamp + _lockDay;
         uint256 _reward;
         uint256 _level;
 
-        if (infoVipUser[_msgSender()].isVip == false) {
+        if (infoVipUser[msg.sender].isVip == false) {
             _reward = options.rewardAmount;
             _level = 0;
         }
         else{
-            uint256 _levelVip = infoVipUser[_msgSender()].vipMember;
+            uint256 _levelVip = infoVipUser[msg.sender].vipMember;
             vipInfo memory vips = infoVipList[_levelVip];
             uint256 _bonus = vips.bonusVip;
             _reward = options.rewardAmount + ((_bonus * (10**18) * options.rewardAmount)/ (100 * (10**18)));
@@ -144,14 +150,14 @@ contract StakingDFH is Pausable, Ownable, StakingOptionsNFT, VipOptions {
 
         emit UsersStaking(msg.sender, _tokenId, _ops, _id, _erc721);
 
-        userInfoTotal storage infoTotals  = infoTotal[_msgSender()];
+        userInfoTotal storage infoTotals  = infoTotal[msg.sender];
         infoTotals.totalUserStaked = infoTotals.totalUserStaked + 1;
         infoTotals.totalUserReward = infoTotals.totalUserReward + _reward;
     }
 
-    function userUnstake(uint256 _ops, uint256 _id, address _erc721) public {
+    function userUnstake(uint256 _ops, uint256 _id, address _erc721) public nonReentrant {
         require(erc721Whitelist[_erc721] == true,"Contract is not in whitelist");
-        bytes32 _value = keccak256(abi.encodePacked(_msgSender(), _ops,_id));
+        bytes32 _value = keccak256(abi.encodePacked(msg.sender, _ops,_id));
         userInfoStaking storage info = infoStaking[_value];
         OptionsStaking storage options = infoOptions[_ops];
         require(info.isActive == true, "UnStaking: Not allowed unstake two times");
@@ -179,8 +185,8 @@ contract StakingDFH is Pausable, Ownable, StakingOptionsNFT, VipOptions {
         claimableTokenId = info.tokenId;
     }
 
-    function claimReward(uint256 _ops, uint256 _id) public{
-        bytes32 _value = keccak256(abi.encodePacked(_msgSender(), _ops,_id));
+    function claimReward(uint256 _ops, uint256 _id) public nonReentrant {
+        bytes32 _value = keccak256(abi.encodePacked(msg.sender, _ops,_id));
         uint256 _claimableReward = _calcReward(_value,_ops);
         require(_claimableReward > 0, "Reward: Nothing to claim");
         tokenRR.transfer(msg.sender,_claimableReward);
@@ -189,7 +195,7 @@ contract StakingDFH is Pausable, Ownable, StakingOptionsNFT, VipOptions {
         userInfoStaking storage info = infoStaking[_value];
         info.reward = 0;
         emit UserReward(msg.sender, _claimableReward, _ops, _id);
-        userInfoTotal storage infoTotals  = infoTotal[_msgSender()];
+        userInfoTotal storage infoTotals  = infoTotal[msg.sender];
         infoTotals.totalUserRewardClaimed = infoTotals.totalUserRewardClaimed + _claimableReward;
     }
 
