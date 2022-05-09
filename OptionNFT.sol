@@ -16,7 +16,7 @@ contract StakingOptionsNFT is Ownable {
         uint256 durationLockReward;
     }
 
-    uint256 public countIdOptions = 3;
+    uint256 public countIdOptions = 0;
 
     mapping(uint256 => OptionsStaking) public infoOptions;
 

@@ -11,7 +11,7 @@ contract VipOptions is Ownable {
         uint256 bonusVip;
         uint256 startTime;
         uint256 endTime;
-        uint256 countedAmount
+        uint256 countedAmount;
     }
 
     uint256 private countIdVips = 4;
