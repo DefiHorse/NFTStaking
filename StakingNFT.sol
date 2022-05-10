@@ -82,6 +82,7 @@ contract StakingNFT is Pausable, Ownable, StakingOptionsNFT, VipOptions,Reentran
     }
 
     function buyVip(uint256 _vip) public whenNotPaused nonReentrant {
+        require(infoVipList[_vip].startTime <= block.timestamp, "Vip is not available");
         require(infoVipList[_vip].endTime >= block.timestamp, "Vip is not available");
         require(infoVipUser[msg.sender].vipMember != _vip, "Vip: You are at this vip");
         require(infoVipUser[msg.sender].vipMember < _vip, "Vip: You are on a higher level than this level");

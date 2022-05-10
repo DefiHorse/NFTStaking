@@ -20,12 +20,6 @@ contract StakingOptionsNFT is Ownable {
 
     mapping(uint256 => OptionsStaking) public infoOptions;
 
-    constructor() {
-        infoOptions[0] = OptionsStaking(uint256(180),uint256(10000000000000000000),uint256(1000),uint256(0),uint256(1649934077),uint256(1682849182),uint256(600));
-        infoOptions[1] = OptionsStaking(uint256(300),uint256(50000000000000000000),uint256(1000),uint256(0),uint256(1649934077),uint256(1682849182),uint256(600));
-        infoOptions[2] = OptionsStaking(uint256(450),uint256(100000000000000000000),uint256(1000),uint256(0),uint256(1649934077),uint256(1682849182),uint256(600));
-    }
-
     function setOptions(
         uint256[] memory _optionInfoDay,
         uint256[] memory _optionInfoReward,
